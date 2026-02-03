@@ -15,3 +15,4 @@
 *.dSYM
 *.xcodeproj/*
 myDay.xcodeprof
+*.vscode

@@ -19,9 +19,6 @@ final class GridViewModel: ObservableObject {
     /// All days in the selected month (each normalized to start of day).
     @Published private(set) var daysInSelectedMonth: [Date] = []
 
-    // Cache for entries keyed by (day, hour)
-    private var cache: [String: TimeEntry] = [:]
-
     convenience init() {
         let schema = Schema([TimeEntry.self])
         let container = try! ModelContainer(for: schema)
@@ -44,12 +41,11 @@ final class GridViewModel: ObservableObject {
 
     // MARK: - Month handling
 
-    /// Recomputes `daysInSelectedMonth` and preloads entries for the month.
+    /// Recomputes `daysInSelectedMonth` for the currently selected calendar month.
     func reloadMonth() {
         guard let startOfMonth = calendar.date(from: DateComponents(year: selectedYear, month: selectedMonth, day: 1)),
               let range = calendar.range(of: .day, in: .month, for: startOfMonth) else {
             daysInSelectedMonth = []
-            cache.removeAll(keepingCapacity: true)
             return
         }
 
@@ -57,13 +53,6 @@ final class GridViewModel: ObservableObject {
             calendar.date(from: DateComponents(year: selectedYear, month: selectedMonth, day: day))?.startOfDay
         }
         daysInSelectedMonth = days
-
-        // Preload entries for the whole month
-        if let first = days.first, let last = days.last {
-            preloadEntries(start: first, end: last)
-        } else {
-            cache.removeAll(keepingCapacity: true)
-        }
 
         objectWillChange.send()
     }
@@ -86,61 +75,28 @@ final class GridViewModel: ObservableObject {
 
     // MARK: - Helpers
 
-    private func key(day: Date, hour: Int) -> String {
-        "\(day.timeIntervalSince1970)-\(hour)"
-    }
-
-    private func preloadEntries(start: Date, end: Date) {
-        let startDay = start.startOfDay
-        let endDay = end.startOfDay
-        let descriptor = FetchDescriptor<TimeEntry>(
-            predicate: #Predicate { $0.date >= startDay && $0.date <= endDay },
-            sortBy: []
-        )
-        do {
-            let items = try context.fetch(descriptor)
-            cache.removeAll(keepingCapacity: true)
-            for item in items {
-                cache[key(day: item.date, hour: item.hour)] = item
-            }
-        } catch {
-            // ignore errors for MVP
-        }
-    }
-
     // MARK: - Public API used by Views
+
+    /// Returns the persisted entry for a given logical day + hour, if one exists.
     func entry(for date: Date, hour: Int) -> TimeEntry? {
-        cache[key(day: date.startOfDay, hour: hour)]
+        fetchEntry(for: date.startOfDay, hour: hour)
     }
 
+    /// Sets the activity for a given (date, hour) slot by updating or inserting
+    /// a `TimeEntry` in SwiftData, then saving the `ModelContext`.
     func set(category: ActivityCategory, for date: Date, hour: Int) {
         let day = date.startOfDay
         let clampedHour = max(0, min(23, hour))
-        let k = key(day: day, hour: clampedHour)
 
-        // 1) Prefer in-memory cache if present.
-        if let existing = cache[k] {
+        if let existing = fetchEntry(for: day, hour: clampedHour) {
+            // Update existing slot
             existing.category = category
-            try? context.save()
-            objectWillChange.send()
-            return
+        } else {
+            // No existing entry – create a new one. TimeEntry itself ensures
+            // date normalization and a unique (day, hour) key at the model level.
+            let new = TimeEntry(date: day, hour: clampedHour, category: category)
+            context.insert(new)
         }
-
-        // 2) Fallback: fetch from the persistent store in case the cache
-        //    is stale or missing this particular (day, hour) entry.
-        if let persisted = fetchEntry(for: day, hour: clampedHour) {
-            persisted.category = category
-            cache[k] = persisted
-            try? context.save()
-            objectWillChange.send()
-            return
-        }
-
-        // 3) No existing entry – create a new one. TimeEntry itself ensures
-        //    date normalization and a unique (day, hour) key at the model level.
-        let new = TimeEntry(date: day, hour: clampedHour, category: category)
-        context.insert(new)
-        cache[k] = new
 
         // In case of a rare race that violates the unique constraint,
         // SwiftData will throw here; for the MVP we ignore the error.

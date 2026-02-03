@@ -18,6 +18,7 @@ struct ContentView: View {
     }
 }
 
+
 // MARK: - TimeGridView
 struct TimeGridView: View {
     private let context: ModelContext
@@ -28,15 +29,15 @@ struct TimeGridView: View {
         _viewModel = StateObject(wrappedValue: GridViewModel(context: context))
     }
 
-    @State private var showingPicker = false
-    @State private var selectedDate: Date? = nil
-    @State private var selectedHour: Int? = nil
+    @State private var activeSlot: SelectedSlot = SelectedSlot(date: Date(), hour: 0)
+    @State private var isShowingPicker: Bool = false
     @State private var isLegendVisible = false
     @State private var isMenuOpen = false
     @State private var isShowingAnalytics = false
 
     @State private var isMonthSelectorExpanded = false
     @State private var hasScrolledToInitialDate = false
+    
 
     var body: some View {
         let dates = viewModel.daysInSelectedMonth
@@ -53,12 +54,35 @@ struct TimeGridView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         ZStack(alignment: .topLeading) {
-                            // Shared horizontal scroll for all rows
+
+                            // MARK: - Shared horizontal scroll (hours + rows)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 LazyVStack(alignment: .leading, spacing: 8) {
+
+                                    // Hour header row (pinned vertically)
+                                    HStack(spacing: GridMetrics.cellSpacing) {
+                                        // Space for date column
+                                        Color.clear
+                                            .frame(width: DateLabelView.columnWidth)
+
+                                        ForEach(0..<24, id: \.self) { hour in
+                                            Text(hourFormatter(hour))
+                                                .font(.caption2)
+                                                .foregroundStyle(.primary.opacity(0.8))
+                                                .frame(
+                                                    width: GridMetrics.cellSize-1.9,
+                                                    height: GridMetrics.headerHeight,
+                                                    alignment: .center
+                                                )
+                                            
+                                        }
+                                    }
+
+                                    // Day rows
                                     ForEach(dates, id: \.self) { day in
                                         HStack(alignment: .top, spacing: 8) {
-                                            // Reserved space for the overlaid date label
+
+                                            // Reserved space for pinned date column
                                             Color.clear
                                                 .frame(
                                                     width: DateLabelView.columnWidth,
@@ -69,26 +93,39 @@ struct TimeGridView: View {
                                                 date: day,
                                                 viewModel: viewModel
                                             ) { d, h in
-                                                selectedDate = d
-                                                selectedHour = h
-                                                showingPicker = true
+                                                activeSlot = SelectedSlot(date: d, hour: h)
+                                                isShowingPicker = true
                                             }
                                         }
                                         .id(day)
                                     }
                                 }
                                 .padding(.vertical, 8)
-                                .padding(.trailing, 8)
+                                .padding(.trailing, 16)
                             }
 
-                            // Pinned date column
-                            LazyVStack(alignment: .leading, spacing: 8) {
-                                ForEach(dates, id: \.self) { day in
-                                    DateLabelView(date: day)
-                                        .id(day)
+                            // MARK: - Pinned date column (left)
+                            ZStack(alignment: .topLeading) {
+                                // Full-height background for the entire pinned column area including left inset
+                                Color(.systemBackground)
+                                    .frame(width: DateLabelView.columnWidth - 15)
+                                    .ignoresSafeArea(edges: .vertical)
+
+                                // Column content
+                                LazyVStack(alignment: .leading, spacing: 8) {
+                                    // Spacer to align below hour header
+                                    Color.clear
+                                        .frame(height: GridMetrics.headerHeight)
+
+                                    ForEach(dates, id: \.self) { day in
+                                        DateLabelView(date: day)
+                                            .padding(.leading, 8)
+                                            .id(day)
+                                    }
                                 }
+                                .padding(.vertical, 8)
                             }
-                            .padding(.vertical, 8)
+//                            .padding(.top, 15)
                         }
                     }
                     .onAppear {
@@ -98,6 +135,7 @@ struct TimeGridView: View {
                         proxy.scrollTo(viewModel.today, anchor: .center)
                     }
                 }
+
             }
 
             if isMenuOpen {
@@ -147,19 +185,23 @@ struct TimeGridView: View {
             viewModel.reloadMonth()
             hasScrolledToInitialDate = false
         }
-        .sheet(isPresented: $showingPicker) {
-            if let d = selectedDate, let h = selectedHour {
-                ActivityPickerSheet(date: d, hour: h) { category in
-                    viewModel.set(category: category, for: d, hour: h)
-                    if h < 23 {
-                        selectedHour = h + 1
-                    } else {
-                        showingPicker = false
-                    }
+        
+        // Present
+        
+        .sheet(isPresented: $isShowingPicker) {
+            ActivityPickerSheet(date: activeSlot.date, hour: activeSlot.hour) { category in
+                viewModel.set(category: category, for: activeSlot.date, hour: activeSlot.hour)
+                if activeSlot.hour < 23 {
+                    // Advance to the next hour in the same day without dismissing the sheet
+                    activeSlot = SelectedSlot(date: activeSlot.date, hour: activeSlot.hour + 1)
+                } else {
+                    // Last hour of the day – dismiss the sheet
+                    isShowingPicker = false
                 }
-                .presentationDetents([.medium, .large])
             }
+            .presentationDetents([.medium, .large])
         }
+        
     }
 
     // MARK: - Month selector
@@ -253,12 +295,35 @@ struct TimeGridView: View {
 
 // MARK: - Supporting grid types
 
+/// Identifies a specific (date, hour) slot in the grid for sheet presentation.
+private struct SelectedSlot: Identifiable, Equatable {
+    let date: Date
+    let hour: Int
+
+    // Use date + hour as a stable identity so the same slot reuses the sheet when advanced.
+    var id: String { "\(date.timeIntervalSince1970)-\(hour)" }
+}
+
 private enum GridMetrics {
     static let cellSize: CGFloat = 36
+    static let cellSpacing: CGFloat = 6
+    static let headerHeight: CGFloat = 20
+}
+
+private func hourFormatter(_ hour: Int) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "ha"
+    let date = Calendar.current.date(
+        bySettingHour: hour,
+        minute: 0,
+        second: 0,
+        of: Date()
+    )!
+    return formatter.string(from: date)
 }
 
 struct DateLabelView: View {
-    static let columnWidth: CGFloat = 100
+    static let columnWidth: CGFloat = 75
 
     let date: Date
 

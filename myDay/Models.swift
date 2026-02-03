@@ -12,7 +12,7 @@ public enum ActivityCategory: String, CaseIterable, Codable, Identifiable, Senda
     case friends
     case leisure
     case family
-    case chores
+//    case chores
     case travel
     case misc
 
@@ -28,7 +28,7 @@ public enum ActivityCategory: String, CaseIterable, Codable, Identifiable, Senda
         case .friends: return "Friends"
         case .leisure: return "Leisure"
         case .family: return "Family"
-        case .chores: return "Chores"
+//        case .chores: return "Chores"
         case .travel: return "Travel"
         case .misc: return "Misc / Getting Ready"
         }
@@ -36,26 +36,45 @@ public enum ActivityCategory: String, CaseIterable, Codable, Identifiable, Senda
 
     public var color: Color {
         switch self {
-        case .sleep: return Color.indigo
-        case .work: return Color.blue
-        case .food: return Color.orange
-        case .productive: return Color.teal
-        case .exercise: return Color.green
-        case .friends: return Color.pink
-        case .leisure: return Color.purple
-        case .family: return Color.cyan
-        case .chores: return Color.brown
-        case .travel: return Color.red
-        case .misc: return Color.gray
+        case .sleep:
+            return Color(red: 0.18, green: 0.18, blue: 0.20)   // soft charcoal
+
+        case .work:
+            return Color(red: 0.78, green: 0.35, blue: 0.35)   // muted red
+
+        case .food:
+            return Color(red: 0.85, green: 0.55, blue: 0.30)   // warm amber
+
+        case .productive:
+            return Color(red: 0.80, green: 0.72, blue: 0.35)   // soft gold (NOT pure yellow)
+
+        case .exercise:
+            return Color(red: 0.35, green: 0.70, blue: 0.50)   // calm green
+
+        case .friends:
+            return Color(red: 0.30, green: 0.65, blue: 0.65)   // soft teal
+
+        case .leisure:
+            return Color(red: 0.40, green: 0.55, blue: 0.85)   // relaxed blue
+
+        case .family:
+            return Color(red: 0.85, green: 0.55, blue: 0.70)   // gentle rose
+
+        case .travel:
+            return Color(red: 0.60, green: 0.45, blue: 0.75)   // muted purple
+
+        case .misc:
+            return Color(red: 0.55, green: 0.55, blue: 0.58)   // neutral gray
         }
     }
+
 }
 
 // MARK: - TimeEntry (SwiftData Model)
 /// Represents a single hour block on a given logical day.
 ///
 /// Data integrity guarantees:
-/// - Only a single `TimeEntry` should exist for a given (date, hour) pair.
+/// - Only a single `TimeEntry` exists for a given (date, hour) pair.
 /// - `date` is always normalized to the start of the logical day (local calendar).
 /// - `dayHourKey` is a stable, unique key for (date, hour) and is enforced as unique by SwiftData.
 @Model
@@ -73,12 +92,13 @@ public final class TimeEntry {
     /// Hour-of-day in 0...23 on the logical day.
     public var hour: Int // 0...23
 
-    /// Backing storage for the category enum.
-    public var categoryRaw: String
+    /// Raw activity identifier (ActivityCategory.rawValue) for this slot.
+    public var activity: String
 
+    /// Convenience computed property to bridge to the strongly-typed enum.
     public var category: ActivityCategory {
-        get { ActivityCategory(rawValue: categoryRaw) ?? .misc }
-        set { categoryRaw = newValue.rawValue }
+        get { ActivityCategory(rawValue: activity) ?? .misc }
+        set { activity = newValue.rawValue }
     }
 
     public init(id: UUID = UUID(), date: Date, hour: Int, category: ActivityCategory) {
@@ -89,7 +109,7 @@ public final class TimeEntry {
 
         self.date = normalizedDay
         self.hour = clampedHour
-        self.categoryRaw = category.rawValue
+        self.activity = category.rawValue
         self.dayHourKey = TimeEntry.makeDayHourKey(for: normalizedDay, hour: clampedHour)
     }
 

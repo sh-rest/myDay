@@ -31,16 +31,18 @@ final class AnalyticsViewModel: ObservableObject {
     }
 
     func refresh() {
-        let calendar = Self.mondayFirstCalendar
+        // Sliding windows based on the reference date (today):
+        // - Current week: today and the previous 6 days (7 days total).
+        // - Previous week: days 7–13 days ago (the 7 days immediately before the current window).
+        let today = referenceDate.startOfDay
 
-        // Determine week boundaries
-        let currentWeekStart = Self.weekStart(for: referenceDate, calendar: calendar)
-        let currentWeekEnd = currentWeekStart.addingDays(6)
+        let currentWeekEnd = today
+        let currentWeekStart = today.addingDays(-6)
 
-        let previousWeekStart = currentWeekStart.addingDays(-7)
-        let previousWeekEnd = currentWeekStart.addingDays(-1)
+        let previousWeekEnd = currentWeekStart.addingDays(-1)   // 7 days ago
+        let previousWeekStart = previousWeekEnd.addingDays(-6)  // 13 days ago
 
-        // Fetch entries for current and previous week
+        // Fetch entries for current and previous sliding weeks
         let currentWeekEntries = fetchEntries(from: currentWeekStart, to: currentWeekEnd)
         let previousWeekEntries = fetchEntries(from: previousWeekStart, to: previousWeekEnd)
 
