@@ -5,42 +5,96 @@ import Combine
 @MainActor
 final class GridViewModel: ObservableObject {
     private let context: ModelContext
+    private let calendar: Calendar
 
-    // Visible window defaults to 7 days centered around today
-    @Published var visibleStartDate: Date
-    @Published var visibleEndDate: Date
+    /// Today in the user's current calendar/timezone, normalized to start of day.
+    let today: Date
+
+    /// Currently selected month (1...12).
+    @Published var selectedMonth: Int
+
+    /// Currently selected year (e.g., 2026).
+    @Published var selectedYear: Int
+
+    /// All days in the selected month (each normalized to start of day).
+    @Published private(set) var daysInSelectedMonth: [Date] = []
 
     // Cache for entries keyed by (day, hour)
     private var cache: [String: TimeEntry] = [:]
 
-    init(context: ModelContext) {
+    convenience init() {
+        let schema = Schema([TimeEntry.self])
+        let container = try! ModelContainer(for: schema)
+        let context = ModelContext(container)
+        self.init(context: context)
+    }
+
+    init(context: ModelContext, calendar: Calendar = .current) {
         self.context = context
+        self.calendar = calendar
+
         let today = Date().startOfDay
-        self.visibleStartDate = today.addingDays(-3)
-        self.visibleEndDate = today.addingDays(3)
-        preloadEntries()
+        self.today = today
+        let comps = calendar.dateComponents([.year, .month], from: today)
+        self.selectedYear = comps.year ?? 2000
+        self.selectedMonth = comps.month ?? 1
+
+        reloadMonth()
+    }
+
+    // MARK: - Month handling
+
+    /// Recomputes `daysInSelectedMonth` and preloads entries for the month.
+    func reloadMonth() {
+        guard let startOfMonth = calendar.date(from: DateComponents(year: selectedYear, month: selectedMonth, day: 1)),
+              let range = calendar.range(of: .day, in: .month, for: startOfMonth) else {
+            daysInSelectedMonth = []
+            cache.removeAll(keepingCapacity: true)
+            return
+        }
+
+        let days: [Date] = range.compactMap { day -> Date? in
+            calendar.date(from: DateComponents(year: selectedYear, month: selectedMonth, day: day))?.startOfDay
+        }
+        daysInSelectedMonth = days
+
+        // Preload entries for the whole month
+        if let first = days.first, let last = days.last {
+            preloadEntries(start: first, end: last)
+        } else {
+            cache.removeAll(keepingCapacity: true)
+        }
+
+        objectWillChange.send()
+    }
+
+    /// Convenience helpers to adjust the current month from the UI.
+    func setMonth(year: Int, month: Int) {
+        selectedYear = year
+        selectedMonth = month
+        reloadMonth()
+    }
+
+    func incrementMonth(by offset: Int) {
+        guard let date = calendar.date(from: DateComponents(year: selectedYear, month: selectedMonth, day: 1)),
+              let newDate = calendar.date(byAdding: .month, value: offset, to: date) else { return }
+        let comps = calendar.dateComponents([.year, .month], from: newDate)
+        selectedYear = comps.year ?? selectedYear
+        selectedMonth = comps.month ?? selectedMonth
+        reloadMonth()
     }
 
     // MARK: - Helpers
-    func datesInRange(start: Date, end: Date) -> [Date] {
-        var dates: [Date] = []
-        var d = start.startOfDay
-        while d <= end.startOfDay {
-            dates.append(d)
-            d = d.addingDays(1)
-        }
-        return dates
-    }
 
     private func key(day: Date, hour: Int) -> String {
         "\(day.timeIntervalSince1970)-\(hour)"
     }
 
-    private func preloadEntries() {
-        let start = visibleStartDate.startOfDay
-        let end = visibleEndDate.startOfDay
+    private func preloadEntries(start: Date, end: Date) {
+        let startDay = start.startOfDay
+        let endDay = end.startOfDay
         let descriptor = FetchDescriptor<TimeEntry>(
-            predicate: #Predicate { $0.date >= start && $0.date <= end },
+            predicate: #Predicate { $0.date >= startDay && $0.date <= endDay },
             sortBy: []
         )
         do {
@@ -107,20 +161,19 @@ final class GridViewModel: ObservableObject {
         }
     }
 
+    // The old 7-day window APIs are no longer used now that the grid is
+    // month-based, but are kept here (no-op) in case existing previews or
+    // tests still reference them.
     func updateVisibleRange(start: Date, end: Date) {
-        visibleStartDate = start.startOfDay
-        visibleEndDate = end.startOfDay
-        preloadEntries()
-        objectWillChange.send()
+        // Map any external calls into the current month based on `start`.
+        let comps = calendar.dateComponents([.year, .month], from: start.startOfDay)
+        selectedYear = comps.year ?? selectedYear
+        selectedMonth = comps.month ?? selectedMonth
+        reloadMonth()
     }
 
     func extendRangeIfNeeded(scrolledToTop: Bool) {
-        if scrolledToTop {
-            visibleStartDate = visibleStartDate.addingDays(-7)
-        } else {
-            visibleEndDate = visibleEndDate.addingDays(7)
-        }
-        preloadEntries()
-        objectWillChange.send()
+        // Interpret extension as paging months up/down.
+        incrementMonth(by: scrolledToTop ? -1 : 1)
     }
 }
