@@ -29,14 +29,14 @@ struct TimeGridView: View {
         _viewModel = StateObject(wrappedValue: GridViewModel(context: context))
     }
 
-    @State private var selectedSlot: SelectedSlot? = nil
+    @State private var activeSlot: SelectedSlot = SelectedSlot(date: Date(), hour: 0)
+    @State private var isShowingPicker: Bool = false
     @State private var isLegendVisible = false
     @State private var isMenuOpen = false
     @State private var isShowingAnalytics = false
 
     @State private var isMonthSelectorExpanded = false
     @State private var hasScrolledToInitialDate = false
-    
     
 
     var body: some View {
@@ -93,7 +93,8 @@ struct TimeGridView: View {
                                                 date: day,
                                                 viewModel: viewModel
                                             ) { d, h in
-                                                selectedSlot = SelectedSlot(date: d, hour: h)
+                                                activeSlot = SelectedSlot(date: d, hour: h)
+                                                isShowingPicker = true
                                             }
                                         }
                                         .id(day)
@@ -184,19 +185,23 @@ struct TimeGridView: View {
             viewModel.reloadMonth()
             hasScrolledToInitialDate = false
         }
-        .sheet(item: $selectedSlot) { slot in
-            ActivityPickerSheet(date: slot.date, hour: slot.hour) { category in
-                viewModel.set(category: category, for: slot.date, hour: slot.hour)
-                if slot.hour < 23 {
-                    // Advance to the next hour in the same day
-                    selectedSlot = SelectedSlot(date: slot.date, hour: slot.hour + 1)
+        
+        // Present
+        
+        .sheet(isPresented: $isShowingPicker) {
+            ActivityPickerSheet(date: activeSlot.date, hour: activeSlot.hour) { category in
+                viewModel.set(category: category, for: activeSlot.date, hour: activeSlot.hour)
+                if activeSlot.hour < 23 {
+                    // Advance to the next hour in the same day without dismissing the sheet
+                    activeSlot = SelectedSlot(date: activeSlot.date, hour: activeSlot.hour + 1)
                 } else {
                     // Last hour of the day – dismiss the sheet
-                    selectedSlot = nil
+                    isShowingPicker = false
                 }
             }
             .presentationDetents([.medium, .large])
         }
+        
     }
 
     // MARK: - Month selector
