@@ -36,16 +36,16 @@ public enum ActivityCategory: String, CaseIterable, Codable, Identifiable, Senda
 
     public var color: Color {
         switch self {
-        case .sleep: return Color.indigo
-        case .work: return Color.blue
+        case .sleep: return Color.black
+        case .work: return Color.red
         case .food: return Color.orange
-        case .productive: return Color.teal
+        case .productive: return Color.yellow
         case .exercise: return Color.green
-        case .friends: return Color.pink
-        case .leisure: return Color.purple
-        case .family: return Color.cyan
+        case .friends: return Color.teal
+        case .leisure: return Color.blue
+        case .family: return Color.pink
         case .chores: return Color.brown
-        case .travel: return Color.red
+        case .travel: return Color.purple
         case .misc: return Color.gray
         }
     }
