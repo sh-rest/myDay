@@ -1,0 +1,17 @@
+.DS_Store
+*.swp
+*.xcuserstate
+*.xcworkspace
+*.xcuserdatada
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+*.xcodeproj
+*.xcworkspace
+*.idea
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.xcodeproj/*
+myDay.xcodeprof
