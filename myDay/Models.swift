@@ -55,7 +55,7 @@ public enum ActivityCategory: String, CaseIterable, Codable, Identifiable, Senda
 /// Represents a single hour block on a given logical day.
 ///
 /// Data integrity guarantees:
-/// - Only a single `TimeEntry` should exist for a given (date, hour) pair.
+/// - Only a single `TimeEntry` exists for a given (date, hour) pair.
 /// - `date` is always normalized to the start of the logical day (local calendar).
 /// - `dayHourKey` is a stable, unique key for (date, hour) and is enforced as unique by SwiftData.
 @Model
@@ -73,12 +73,13 @@ public final class TimeEntry {
     /// Hour-of-day in 0...23 on the logical day.
     public var hour: Int // 0...23
 
-    /// Backing storage for the category enum.
-    public var categoryRaw: String
+    /// Raw activity identifier (ActivityCategory.rawValue) for this slot.
+    public var activity: String
 
+    /// Convenience computed property to bridge to the strongly-typed enum.
     public var category: ActivityCategory {
-        get { ActivityCategory(rawValue: categoryRaw) ?? .misc }
-        set { categoryRaw = newValue.rawValue }
+        get { ActivityCategory(rawValue: activity) ?? .misc }
+        set { activity = newValue.rawValue }
     }
 
     public init(id: UUID = UUID(), date: Date, hour: Int, category: ActivityCategory) {
@@ -89,7 +90,7 @@ public final class TimeEntry {
 
         self.date = normalizedDay
         self.hour = clampedHour
-        self.categoryRaw = category.rawValue
+        self.activity = category.rawValue
         self.dayHourKey = TimeEntry.makeDayHourKey(for: normalizedDay, hour: clampedHour)
     }
 
