@@ -46,17 +46,48 @@ struct TimeGridView: View {
                 }
 
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(dates, id: \.self) { day in
-                            DayRowView(date: day, viewModel: viewModel) { d, h in
-                                selectedDate = d
-                                selectedHour = h
-                                showingPicker = true
+                    // We overlay a pinned date column on top of a single shared
+                    // horizontally scrolling grid. Dates do not move horizontally,
+                    // but rows stay visually aligned because we reserve leading space
+                    // in the grid equal to the date column width.
+                    ZStack(alignment: .topLeading) {
+                        // Shared horizontal scroll for all rows
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyVStack(alignment: .leading, spacing: 8) {
+                                ForEach(dates, id: \.self) { day in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        // Reserved space for the overlaid date label
+                                        Color.clear
+                                            .frame(
+                                                width: DateLabelView.columnWidth,
+                                                height: GridMetrics.cellSize
+                                            )
+
+                                        DayRowView(
+                                            date: day,
+                                            viewModel: viewModel
+                                        ) { d, h in
+                                            selectedDate = d
+                                            selectedHour = h
+                                            showingPicker = true
+                                        }
+                                    }
+                                    .id(day)
+                                }
                             }
-                            .id(day)
+                            .padding(.vertical, 8)
+                            .padding(.trailing, 8)
                         }
+
+                        // Pinned date column, vertically aligned with the grid rows
+                        LazyVStack(alignment: .leading, spacing: 8) {
+                            ForEach(dates, id: \.self) { day in
+                                DateLabelView(date: day)
+                                    .id(day)
+                            }
+                        }
+                        .padding(.vertical, 8)
                     }
-                    .padding(.vertical, 8)
                 }
             }
 
@@ -125,38 +156,56 @@ struct TimeGridView: View {
     private func updateViewModelContextIfNeeded() -> Bool { true }
 }
 
-// MARK: - DayRowView
-struct DayRowView: View {
-    let date: Date
-    @ObservedObject var viewModel: GridViewModel
-    let onTapCell: (Date, Int) -> Void
+// MARK: - DateLabelView
+private enum GridMetrics {
+    static let cellSize: CGFloat = 36
+}
 
-    private let hourRange = Array(0...23)
-    private let dateFormatter: DateFormatter = {
+struct DateLabelView: View {
+    static let columnWidth: CGFloat = 100
+
+    let date: Date
+
+    private static let dateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.dateFormat = "EEE, MMM d"
         return df
     }()
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text(dateFormatter.string(from: date))
-                .font(.caption)
-                .frame(width: 100, alignment: .leading)
-                .padding(.leading, 8)
+        Text(DateLabelView.dateFormatter.string(from: date))
+            .font(.caption)
+            .frame(
+                width: DateLabelView.columnWidth,
+                height: GridMetrics.cellSize,
+                alignment: .leading
+            )
+            .background(Color(.systemBackground))
+    }
+}
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 4) {
-                    ForEach(hourRange, id: \.self) { hour in
-                        TimeCellView(date: date, hour: hour, entry: viewModel.entry(for: date, hour: hour)) {
-                            onTapCell(date, hour)
-                        }
-                    }
+// MARK: - DayRowView
+/// A single row of hour tiles for a given day.
+/// Horizontal scrolling is handled by the parent; this view only lays out cells.
+struct DayRowView: View {
+    let date: Date
+    @ObservedObject var viewModel: GridViewModel
+    let onTapCell: (Date, Int) -> Void
+
+    private let hourRange = Array(0...23)
+
+    var body: some View {
+        LazyHStack(spacing: 4) {
+            ForEach(hourRange, id: \.self) { hour in
+                TimeCellView(
+                    date: date,
+                    hour: hour,
+                    entry: viewModel.entry(for: date, hour: hour)
+                ) {
+                    onTapCell(date, hour)
                 }
-                .padding(.trailing, 8)
             }
         }
-        .padding(.horizontal, 8)
     }
 }
 
@@ -167,7 +216,7 @@ struct TimeCellView: View {
     let entry: TimeEntry?
     let onTap: () -> Void
 
-    private var size: CGFloat { 36 } // fixed square size
+    private var size: CGFloat { GridMetrics.cellSize } // fixed square size
 
     var body: some View {
         let bg = entry?.category.color ?? Color.gray.opacity(0.2)
