@@ -9,17 +9,24 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var context
+
     var body: some View {
         NavigationStack {
-            TimeGridView()
+            TimeGridView(context: context)
         }
     }
 }
 
 // MARK: - TimeGridView
 struct TimeGridView: View {
-    @Environment(\.modelContext) private var context
+    private let context: ModelContext
     @StateObject private var viewModel: GridViewModel
+
+    init(context: ModelContext) {
+        self.context = context
+        _viewModel = StateObject(wrappedValue: GridViewModel(context: context))
+    }
 
     @State private var showingPicker = false
     @State private var selectedDate: Date? = nil
@@ -28,15 +35,11 @@ struct TimeGridView: View {
     @State private var isMenuOpen = false
     @State private var isShowingAnalytics = false
 
-    init() {
-        // We'll initialize with a temporary empty container, and then swap in onAppear.
-        let temp = ModelContext(try! ModelContainer(for: TimeEntry.self))
-        _viewModel = StateObject(wrappedValue: GridViewModel(context: temp))
-    }
+    @State private var isMonthSelectorExpanded = false
+    @State private var hasScrolledToInitialDate = false
 
     var body: some View {
-        let _ = updateViewModelContextIfNeeded()
-        let dates = viewModel.datesInRange(start: viewModel.visibleStartDate, end: viewModel.visibleEndDate)
+        let dates = viewModel.daysInSelectedMonth
 
         ZStack(alignment: .leading) {
             VStack(spacing: 0) {
@@ -45,48 +48,54 @@ struct TimeGridView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
-                ScrollView {
-                    // We overlay a pinned date column on top of a single shared
-                    // horizontally scrolling grid. Dates do not move horizontally,
-                    // but rows stay visually aligned because we reserve leading space
-                    // in the grid equal to the date column width.
-                    ZStack(alignment: .topLeading) {
-                        // Shared horizontal scroll for all rows
-                        ScrollView(.horizontal, showsIndicators: false) {
+                monthSelector
+
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        ZStack(alignment: .topLeading) {
+                            // Shared horizontal scroll for all rows
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                LazyVStack(alignment: .leading, spacing: 8) {
+                                    ForEach(dates, id: \.self) { day in
+                                        HStack(alignment: .top, spacing: 8) {
+                                            // Reserved space for the overlaid date label
+                                            Color.clear
+                                                .frame(
+                                                    width: DateLabelView.columnWidth,
+                                                    height: GridMetrics.cellSize
+                                                )
+
+                                            DayRowView(
+                                                date: day,
+                                                viewModel: viewModel
+                                            ) { d, h in
+                                                selectedDate = d
+                                                selectedHour = h
+                                                showingPicker = true
+                                            }
+                                        }
+                                        .id(day)
+                                    }
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.trailing, 8)
+                            }
+
+                            // Pinned date column
                             LazyVStack(alignment: .leading, spacing: 8) {
                                 ForEach(dates, id: \.self) { day in
-                                    HStack(alignment: .top, spacing: 8) {
-                                        // Reserved space for the overlaid date label
-                                        Color.clear
-                                            .frame(
-                                                width: DateLabelView.columnWidth,
-                                                height: GridMetrics.cellSize
-                                            )
-
-                                        DayRowView(
-                                            date: day,
-                                            viewModel: viewModel
-                                        ) { d, h in
-                                            selectedDate = d
-                                            selectedHour = h
-                                            showingPicker = true
-                                        }
-                                    }
-                                    .id(day)
+                                    DateLabelView(date: day)
+                                        .id(day)
                                 }
                             }
                             .padding(.vertical, 8)
-                            .padding(.trailing, 8)
                         }
-
-                        // Pinned date column, vertically aligned with the grid rows
-                        LazyVStack(alignment: .leading, spacing: 8) {
-                            ForEach(dates, id: \.self) { day in
-                                DateLabelView(date: day)
-                                    .id(day)
-                            }
-                        }
-                        .padding(.vertical, 8)
+                    }
+                    .onAppear {
+                        guard !hasScrolledToInitialDate,
+                              dates.contains(viewModel.today) else { return }
+                        hasScrolledToInitialDate = true
+                        proxy.scrollTo(viewModel.today, anchor: .center)
                     }
                 }
             }
@@ -111,7 +120,7 @@ struct TimeGridView: View {
                 .zIndex(1)
             }
         }
-.navigationDestination(isPresented: $isShowingAnalytics) {
+        .navigationDestination(isPresented: $isShowingAnalytics) {
             AnalyticsView(context: context)
         }
         .navigationTitle("myDay")
@@ -128,21 +137,20 @@ struct TimeGridView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Legend") {
-                    withAnimation(.spring()) {
+                    withAnimation(.easeInOut) {
                         isLegendVisible.toggle()
                     }
                 }
             }
         }
         .onAppear {
-            viewModel.updateVisibleRange(start: viewModel.visibleStartDate, end: viewModel.visibleEndDate)
+            viewModel.reloadMonth()
+            hasScrolledToInitialDate = false
         }
         .sheet(isPresented: $showingPicker) {
             if let d = selectedDate, let h = selectedHour {
                 ActivityPickerSheet(date: d, hour: h) { category in
-                    // Save/update
                     viewModel.set(category: category, for: d, hour: h)
-                    // Advance hour or dismiss
                     if h < 23 {
                         selectedHour = h + 1
                     } else {
@@ -153,10 +161,98 @@ struct TimeGridView: View {
             }
         }
     }
-    private func updateViewModelContextIfNeeded() -> Bool { true }
+
+    // MARK: - Month selector
+
+    private var monthSelector: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isMonthSelectorExpanded.toggle()
+                }
+            }) {
+                HStack {
+                    Text(monthYearTitle)
+                        .font(.headline)
+                        .foregroundColor(.accentColor)
+                    Spacer()
+                    Image(systemName: isMonthSelectorExpanded ? "chevron.up" : "chevron.down")
+                        .font(.subheadline)
+                        .foregroundColor(.accentColor)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+
+            if isMonthSelectorExpanded {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: Color.black.opacity(0.12), radius: 4, x: 0, y: 2)
+                    .overlay(
+                        HStack(spacing: 16) {
+                            Picker(
+                                "Month",
+                                selection: $viewModel.selectedMonth
+                            ) {
+                                ForEach(1...12, id: \.self) { month in
+                                    Text(monthSymbol(for: month))
+                                        .tag(month)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity)
+                            .clipped()
+                            .pickerStyle(.wheel)
+
+                            Picker(
+                                "Year",
+                                selection: $viewModel.selectedYear
+                            ) {
+                                ForEach(allowedYears, id: \.self) { year in
+                                    Text(String(year))
+                                        .tag(year)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity)
+                            .clipped()
+                            .pickerStyle(.wheel)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 4)
+            }
+        }
+    }
+    private func monthSymbol(for month: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        return formatter.monthSymbols[month - 1]
+    }
+    
+    private var allowedYears: [Int] {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        return Array((currentYear - 10)...(currentYear + 10))
+    }
+
+    private var monthYearTitle: String {
+        var comps = DateComponents()
+        comps.year = viewModel.selectedYear
+        comps.month = viewModel.selectedMonth
+        comps.day = 1
+        let cal = Calendar.current
+        let date = cal.date(from: comps) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "LLLL yyyy"
+        return formatter.string(from: date)
+    }
 }
 
-// MARK: - DateLabelView
+// MARK: - Supporting grid types
+
 private enum GridMetrics {
     static let cellSize: CGFloat = 36
 }
@@ -242,3 +338,4 @@ struct TimeCellView: View {
     ContentView()
         .modelContainer(for: TimeEntry.self, inMemory: true)
 }
+

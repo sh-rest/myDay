@@ -40,35 +40,36 @@ At the time of writing there is no dedicated linting configuration (e.g., SwiftL
 
 - `myDay/GridViewModel.swift` defines `GridViewModel`, the main `ObservableObject` backing the time grid.
   - It is annotated with `@MainActor` and holds a `ModelContext` used for all SwiftData operations related to `TimeEntry`.
-  - It tracks a visible date window via `visibleStartDate` and `visibleEndDate`, initialized to a 7‑day range centered on today (`today.addingDays(-3)` to `today.addingDays(3)`).
+  - It exposes `selectedMonth` and `selectedYear`, plus `today` (normalized to start-of-day) and `daysInSelectedMonth: [Date]`, which are the source of truth for the grid’s vertical axis.
   - It maintains an in‑memory cache `[String: TimeEntry]` keyed by `(day, hour)` to avoid repeated fetches for cells that are already loaded.
 - Key responsibilities:
-  - `datesInRange(start:end:)` produces a list of day‑granularity `Date` values between two endpoints; this is what drives the vertical list of days in the UI.
-  - `preloadEntries()` issues a SwiftData `FetchDescriptor<TimeEntry>` for the current visible date range and repopulates the cache.
+  - `reloadMonth()` recomputes `daysInSelectedMonth` for the current `selectedMonth`/`selectedYear` and preloads all `TimeEntry` rows for that calendar month via a `FetchDescriptor`.
+  - `setMonth(year:month:)` and `incrementMonth(by:)` adjust the selected calendar month and call `reloadMonth()`.
   - `entry(for:hour:)` looks up a cached `TimeEntry` for a given day/hour.
   - `set(category:for:hour:)` either updates an existing `TimeEntry` or inserts a new one, saves the context (`try? context.save()`), updates the cache, and manually triggers `objectWillChange` so SwiftUI refreshes the grid.
-  - `updateVisibleRange(start:end:)` and `extendRangeIfNeeded(scrolledToTop:)` adjust the visible date window, call `preloadEntries()`, and notify observers, enabling an extensible, scrollable timeline.
 
 ### UI layer and composition
 
 - `myDay/ContentView.swift` is the top‑level SwiftUI view used in production.
-  - It embeds `TimeGridView` inside a `NavigationStack`, sets the navigation title to "myDay", and defines toolbar buttons for a side menu (currently just toggling `showMenu`) and a Legend sheet.
-  - The Legend sheet presents a list of all `ActivityCategory` cases, each with its color dot and display name, so users can interpret the grid colors.
-- `TimeGridView` (also in `ContentView.swift`) is the main screen for visualizing and editing the day/hour grid.
-  - It owns a `@StateObject` `GridViewModel` and some UI state (`showingPicker`, `selectedDate`, `selectedHour`).
-  - In its initializer, it constructs a temporary `ModelContext` from a `ModelContainer(for: TimeEntry.self)` and injects that into `GridViewModel`. The helper `updateViewModelContextIfNeeded()` is currently a stub returning `true`; it exists as a hook if you later want to reconcile the view model’s context with the environment’s `modelContext`.
-  - The body builds a vertical `ScrollView` of `DayRowView` rows, one per date in the `visibleStartDate...visibleEndDate` range from the view model.
-  - Each `DayRowView` exposes a callback `onTapCell` used to open the `ActivityPickerSheet` for the tapped date/hour.
-  - On `onAppear`, `TimeGridView` calls `viewModel.updateVisibleRange(...)` to ensure the model preloads data for the initial window.
-- `DayRowView` lays out a single day:
-  - Left side: a formatted date label (e.g., "Mon, Feb 3") in a fixed‑width column.
-  - Right side: a horizontally scrollable row of 24 `TimeCellView` instances (hours 0–23). Each cell queries `viewModel.entry(for:date:hour:)` to determine its background color.
+  - It embeds `TimeGridView` inside a `NavigationStack`, sets the navigation title to "myDay", and defines toolbar buttons for a side menu and a Legend toggle.
+  - The Legend presents a list of all `ActivityCategory` cases, each with its color dot and display name, so users can interpret the grid colors.
+- `TimeGridView` is the main screen for visualizing and editing the day/hour grid.
+  - It owns a `@StateObject` `GridViewModel` and some UI state (`showingPicker`, `selectedDate`, `selectedHour`, month selector expansion, menu state).
+  - A collapsible month/year selector (implemented with SwiftUI `Picker`s) drives `viewModel.selectedMonth` and `viewModel.selectedYear` via `setMonth(year:month:)`. Changing either picker recomputes `daysInSelectedMonth`.
+  - The main grid uses a vertical `ScrollView` wrapped in a `ScrollViewReader` for initial centering, and a single shared `ScrollView(.horizontal)` for all rows. Each day is rendered by `DayRowView` and aligned with a pinned date label on the left.
+  - On first appearance, if `today` is contained in `daysInSelectedMonth`, the `ScrollViewReader` scrolls that row into view (centered vertically).
+- `DayRowView` represents a single calendar day:
+  - Left side (pinned column): a `DateLabelView` (overlaid in `TimeGridView`) shows the formatted day string (e.g., "Mon, Feb 3") with a fixed width matching the reserved leading space in the horizontal grid.
+  - Right side: a horizontally scrolling `LazyHStack` of 24 `TimeCellView` instances (hours 0–23). Each cell queries `viewModel.entry(for:hour:)` to determine its background color.
 - `TimeCellView` represents a single hour block:
   - It renders a colored square (`Rectangle`) whose fill color is based on the associated `TimeEntry.category.color`, or a gray placeholder if there is no entry.
   - It exposes a tap gesture that triggers the `onTap` callback and an accessibility label that announces the hour and selected activity category.
 - `myDay/ActivityPickerSheet.swift` implements the sheet used to choose an activity for a given date/hour.
   - It presents the selected date and a human‑readable hour interval (e.g., "3 PM – 4 PM"), then lists all `ActivityCategory` values with their colors.
   - Tapping a row invokes the injected `onSelect(ActivityCategory)` closure, which in `TimeGridView` is wired to `GridViewModel.set(category:for:hour:)` and then optionally advances to the next hour or dismisses the sheet.
+- `myDay/AnalyticsViewModel.swift` and `myDay/AnalyticsView.swift` implement a simple analytics screen reachable from the side menu.
+  - The view model loads `TimeEntry` data via SwiftData to compute per‑activity average hours/day for the current and previous week and a streak count of consecutive days with at least one logged entry.
+  - The view presents this as text rows with an up/down/flat indicator showing week‑over‑week trends.
 
 ### Notable design considerations
 
@@ -76,4 +77,4 @@ At the time of writing there is no dedicated linting configuration (e.g., SwiftL
   - `myDayApp` sets up a shared `ModelContainer` for `Item` only.
   - `TimeGridView` constructs its own `ModelContainer`/`ModelContext` for `TimeEntry` and passes it into `GridViewModel`.
   - If you evolve the data model or add more features, consider consolidating on a single `ModelContainer` that includes `TimeEntry` (and any future models) so previews, production, and tests all share consistent configuration.
-- Error handling in `GridViewModel` is intentionally minimal (`try? context.save()` and ignoring fetch errors). If you introduce more advanced flows (sync, background processing, etc.), you may want to add structured error handling and logging around these operations.
+- Error handling in `GridViewModel` and `AnalyticsViewModel` is intentionally minimal (`try? context.save()` / `try? context.fetch` and ignoring errors). If you introduce more advanced flows (sync, background processing, etc.), you may want to add structured error handling and logging around these operations.
