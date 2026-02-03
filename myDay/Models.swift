@@ -12,7 +12,7 @@ public enum ActivityCategory: String, CaseIterable, Codable, Identifiable, Senda
     case friends
     case leisure
     case family
-    case chores
+//    case chores
     case travel
     case misc
 
@@ -28,7 +28,7 @@ public enum ActivityCategory: String, CaseIterable, Codable, Identifiable, Senda
         case .friends: return "Friends"
         case .leisure: return "Leisure"
         case .family: return "Family"
-        case .chores: return "Chores"
+//        case .chores: return "Chores"
         case .travel: return "Travel"
         case .misc: return "Misc / Getting Ready"
         }
@@ -36,19 +36,38 @@ public enum ActivityCategory: String, CaseIterable, Codable, Identifiable, Senda
 
     public var color: Color {
         switch self {
-        case .sleep: return Color.black
-        case .work: return Color.red
-        case .food: return Color.orange
-        case .productive: return Color.yellow
-        case .exercise: return Color.green
-        case .friends: return Color.teal
-        case .leisure: return Color.blue
-        case .family: return Color.pink
-        case .chores: return Color.brown
-        case .travel: return Color.purple
-        case .misc: return Color.gray
+        case .sleep:
+            return Color(red: 0.18, green: 0.18, blue: 0.20)   // soft charcoal
+
+        case .work:
+            return Color(red: 0.78, green: 0.35, blue: 0.35)   // muted red
+
+        case .food:
+            return Color(red: 0.85, green: 0.55, blue: 0.30)   // warm amber
+
+        case .productive:
+            return Color(red: 0.80, green: 0.72, blue: 0.35)   // soft gold (NOT pure yellow)
+
+        case .exercise:
+            return Color(red: 0.35, green: 0.70, blue: 0.50)   // calm green
+
+        case .friends:
+            return Color(red: 0.30, green: 0.65, blue: 0.65)   // soft teal
+
+        case .leisure:
+            return Color(red: 0.40, green: 0.55, blue: 0.85)   // relaxed blue
+
+        case .family:
+            return Color(red: 0.85, green: 0.55, blue: 0.70)   // gentle rose
+
+        case .travel:
+            return Color(red: 0.60, green: 0.45, blue: 0.75)   // muted purple
+
+        case .misc:
+            return Color(red: 0.55, green: 0.55, blue: 0.58)   // neutral gray
         }
     }
+
 }
 
 // MARK: - TimeEntry (SwiftData Model)
