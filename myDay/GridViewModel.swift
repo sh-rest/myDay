@@ -17,7 +17,19 @@ final class GridViewModel: ObservableObject {
     @Published var selectedYear: Int
 
     /// All days in the selected month (each normalized to start of day).
-    @Published private(set) var daysInSelectedMonth: [Date] = []
+    /// This is derived from `selectedYear` and `selectedMonth` so it always
+    /// stays in sync when either of those values change.
+    var daysInSelectedMonth: [Date] {
+        guard let startOfMonth = calendar.date(from: DateComponents(year: selectedYear, month: selectedMonth, day: 1)),
+              let range = calendar.range(of: .day, in: .month, for: startOfMonth) else {
+            return []
+        }
+
+        let days: [Date] = range.compactMap { day -> Date? in
+            calendar.date(from: DateComponents(year: selectedYear, month: selectedMonth, day: day))?.startOfDay
+        }
+        return days
+    }
 
     convenience init() {
         let schema = Schema([TimeEntry.self])
@@ -35,33 +47,14 @@ final class GridViewModel: ObservableObject {
         let comps = calendar.dateComponents([.year, .month], from: today)
         self.selectedYear = comps.year ?? 2000
         self.selectedMonth = comps.month ?? 1
-
-        reloadMonth()
     }
 
     // MARK: - Month handling
-
-    /// Recomputes `daysInSelectedMonth` for the currently selected calendar month.
-    func reloadMonth() {
-        guard let startOfMonth = calendar.date(from: DateComponents(year: selectedYear, month: selectedMonth, day: 1)),
-              let range = calendar.range(of: .day, in: .month, for: startOfMonth) else {
-            daysInSelectedMonth = []
-            return
-        }
-
-        let days: [Date] = range.compactMap { day -> Date? in
-            calendar.date(from: DateComponents(year: selectedYear, month: selectedMonth, day: day))?.startOfDay
-        }
-        daysInSelectedMonth = days
-
-        objectWillChange.send()
-    }
 
     /// Convenience helpers to adjust the current month from the UI.
     func setMonth(year: Int, month: Int) {
         selectedYear = year
         selectedMonth = month
-        reloadMonth()
     }
 
     func incrementMonth(by offset: Int) {
@@ -70,7 +63,6 @@ final class GridViewModel: ObservableObject {
         let comps = calendar.dateComponents([.year, .month], from: newDate)
         selectedYear = comps.year ?? selectedYear
         selectedMonth = comps.month ?? selectedMonth
-        reloadMonth()
     }
 
     // MARK: - Helpers
@@ -125,7 +117,6 @@ final class GridViewModel: ObservableObject {
         let comps = calendar.dateComponents([.year, .month], from: start.startOfDay)
         selectedYear = comps.year ?? selectedYear
         selectedMonth = comps.month ?? selectedMonth
-        reloadMonth()
     }
 
     func extendRangeIfNeeded(scrolledToTop: Bool) {
