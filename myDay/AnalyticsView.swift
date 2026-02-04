@@ -4,58 +4,100 @@ import SwiftData
 struct AnalyticsView: View {
     @StateObject private var viewModel: AnalyticsViewModel
 
+    // Currently selected activity for the detail sheet
+    @State private var selectedActivity: ActivityCategory? = nil
+
     init(context: ModelContext) {
         _viewModel = StateObject(wrappedValue: AnalyticsViewModel(context: context))
     }
-
     var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 4) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // Streak card
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Streak")
                         .font(.headline)
                     Text("\(viewModel.streakCount) day\(viewModel.streakCount == 1 ? "" : "s") in a row")
                         .font(.title3)
-                        .bold()
+                        .fontWeight(.semibold)
                 }
-                .padding(.vertical, 4)
-            }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color(.secondarySystemBackground))
+                )
 
-            Section("Activity Averages") {
-                ForEach(ActivityCategory.allCases, id: \.self) { activity in
-                    if let stats = viewModel.activityStats[activity] {
-                        NavigationLink {
-                            ActivityAnalyticsView(activity: activity, viewModel: viewModel)
-                        } label: {
-                            HStack(alignment: .center, spacing: 12) {
-                                Circle()
-                                    .fill(activity.color)
-                                    .frame(width: 10, height: 10)
+                // Activity averages header
+                Text("Activity Averages")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
 
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(activity.displayName)
-                                        .font(.headline)
+                // Activity cards
+                VStack(spacing: 12) {
+                    ForEach(ActivityCategory.allCases, id: \.self) { activity in
+                        if let stats = viewModel.activityStats[activity] {
+                            Button {
+                                selectedActivity = activity
+                            } label: {
+                                HStack(alignment: .top, spacing: 12) {
+                                    Circle()
+                                        .fill(activity.color)
+                                        .frame(width: 10, height: 10)
 
-                                    HStack(spacing: 12) {
-                                        Text("This week: \(formatHours(stats.currentWeekAverageHoursPerDay)) h/day")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(activity.displayName)
+                                            .font(.headline)
 
-                                        Text("Last week: \(formatHours(stats.previousWeekAverageHoursPerDay)) h/day")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                        HStack(alignment: .top, spacing: 16) {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("This week")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                Text("\(formatHours(stats.currentWeekAverageHoursPerDay)) h/day")
+                                                    .font(.subheadline)
+                                            }
+
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Last week")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                Text("\(formatHours(stats.previousWeekAverageHoursPerDay)) h/day")
+                                                    .font(.subheadline)
+                                            }
+                                        }
                                     }
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundStyle(.tertiary)
                                 }
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(Color(.secondarySystemBackground))
+                                )
                             }
-                            .padding(.vertical, 4)
+                            .buttonStyle(.plain)
                         }
                     }
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
         }
-        .listStyle(.insetGrouped)
+        .background(Color(.systemGroupedBackground))
         .navigationTitle("Analytics")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $selectedActivity) { activity in
+            NavigationStack {
+                ActivityAnalyticsView(activity: activity, viewModel: viewModel)
+            }
+            .presentationDetents([.medium, .large])
+        }
     }
 
     // MARK: - Helpers
