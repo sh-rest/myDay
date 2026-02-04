@@ -68,15 +68,15 @@ struct TimeGridView: View {
                                         ForEach(0..<24, id: \.self) { hour in
                                             Text(hourFormatter(hour))
                                                 .font(.caption2)
-                                                .foregroundStyle(.primary.opacity(0.8))
+                                                .foregroundStyle(.secondary)
                                                 .frame(
-                                                    width: GridMetrics.cellSize-1.9,
+                                                    width: GridMetrics.cellSize - 2,
                                                     height: GridMetrics.headerHeight,
                                                     alignment: .center
                                                 )
-                                            
                                         }
                                     }
+                                    .padding(.bottom, 4)
 
                                     // Day rows
                                     ForEach(dates, id: \.self) { day in
@@ -107,8 +107,10 @@ struct TimeGridView: View {
                             // MARK: - Pinned date column (left)
                             ZStack(alignment: .topLeading) {
                                 // Full-height background for the entire pinned column area including left inset
-                                Color(.systemBackground)
-                                    .frame(width: DateLabelView.columnWidth - 15)
+                                // Invisible spacer to reserve width for the pinned date column
+                                Rectangle()
+                                    .fill(.background)
+                                    .frame(width: DateLabelView.columnWidth)
                                     .ignoresSafeArea(edges: .vertical)
 
                                 // Column content
@@ -118,9 +120,11 @@ struct TimeGridView: View {
                                         .frame(height: GridMetrics.headerHeight)
 
                                     ForEach(dates, id: \.self) { day in
-                                        DateLabelView(date: day)
-                                            .padding(.leading, 8)
-                                            .id(day)
+                                        DateLabelView(
+                                            date: day,
+                                            isToday: Calendar.current.isDate(day, inSameDayAs: viewModel.today)
+                                        )
+                                        .id(day)
                                     }
                                 }
                                 .padding(.vertical, 8)
@@ -161,8 +165,9 @@ struct TimeGridView: View {
         .navigationDestination(isPresented: $isShowingAnalytics) {
             AnalyticsView(context: context)
         }
-        .navigationTitle("myDay")
+.navigationTitle("myDay")
         .navigationBarTitleDisplayMode(.inline)
+        .background(.background)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(action: {
@@ -322,9 +327,10 @@ private func hourFormatter(_ hour: Int) -> String {
 }
 
 struct DateLabelView: View {
-    static let columnWidth: CGFloat = 75
+    static let columnWidth: CGFloat = 80
 
     let date: Date
+    var isToday: Bool = false
 
     private static let dateFormatter: DateFormatter = {
         let df = DateFormatter()
@@ -333,14 +339,27 @@ struct DateLabelView: View {
     }()
 
     var body: some View {
-        Text(DateLabelView.dateFormatter.string(from: date))
+        let labelText = Text(DateLabelView.dateFormatter.string(from: date))
             .font(.caption)
-            .frame(
-                width: DateLabelView.columnWidth,
-                height: GridMetrics.cellSize,
-                alignment: .leading
-            )
-            .background(Color(.systemBackground))
+            .fontWeight(isToday ? .semibold : .regular)
+            .foregroundStyle(isToday ? .primary : .secondary)
+            .multilineTextAlignment(.center)
+
+        ZStack {
+            // Background capsule spanning the full width of the date column
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isToday ? Color(.tertiarySystemBackground) : Color.clear)
+
+            // Centered label with symmetric horizontal padding
+            labelText
+                .padding(.horizontal, 8)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .frame(
+            width: DateLabelView.columnWidth,
+            height: GridMetrics.cellSize,
+            alignment: .center
+        )
     }
 }
 
@@ -379,11 +398,23 @@ struct TimeCellView: View {
     private var size: CGFloat { GridMetrics.cellSize } // fixed square size
 
     var body: some View {
-        let bg = entry?.category.color ?? Color.gray.opacity(0.2)
-        Rectangle()
-            .fill(bg)
+//        let isFilled = entry != nil
+
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color(.secondarySystemBackground))
+            .overlay {
+                if let entry = entry {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(entry.category.color.opacity(0.75))
+                        .padding(4)
+                } else {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color(.quaternaryLabel), lineWidth: 0.5)
+                        .padding(4)
+                }
+            }
             .frame(width: size, height: size)
-            .cornerRadius(6)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .onTapGesture { onTap() }
             .accessibilityLabel(Text(accessibilityDescription))
     }
