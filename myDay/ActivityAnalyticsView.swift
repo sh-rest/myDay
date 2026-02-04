@@ -18,52 +18,68 @@ struct ActivityAnalyticsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(activity.color)
-                    .frame(width: 12, height: 12)
-                Text(activity.displayName)
-                    .font(.headline)
-            }
-            .padding(.top, 8)
-
-            Text("Last 30 days")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Chart(dailyData) { item in
-                LineMark(
-                    x: .value("Date", item.date),
-                    y: .value("Hours", item.hours)
-                )
-                .interpolationMethod(.monotone)
-                .foregroundStyle(activity.color)
-
-                PointMark(
-                    x: .value("Date", item.date),
-                    y: .value("Hours", item.hours)
-                )
-                .foregroundStyle(activity.color.opacity(0.8))
-            }
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 6)) { value in
-                    AxisGridLine()
-                    AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(activity.color)
+                        .frame(width: 12, height: 12)
+                    Text(activity.displayName)
+                        .font(.title2)
+                        .fontWeight(.semibold)
                 }
-            }
-            .chartYAxis {
-                AxisMarks { value in
-                    AxisGridLine()
-                    AxisValueLabel()
-                }
-            }
-            .chartYScale(domain: 0...24)
-            .frame(minHeight: 240)
+                .padding(.top, 4)
 
-            Spacer()
+                Text("Last 30 Days")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                // Chart card
+                Chart(dailyData) { item in
+                    LineMark(
+                        x: .value("Date", item.date),
+                        y: .value("Hours", item.hours)
+                    )
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(activity.color)
+
+                    PointMark(
+                        x: .value("Date", item.date),
+                        y: .value("Hours", item.hours)
+                    )
+                    .foregroundStyle(activity.color.opacity(0.9))
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { _ in
+                        AxisGridLine().foregroundStyle(Color(.quaternaryLabel))
+                        AxisValueLabel()
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                        AxisGridLine().foregroundStyle(Color(.quaternaryLabel))
+                        AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .chartYScale(domain: 0...24)
+                .frame(height: 260)
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.secondarySystemBackground))
+                )
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
         }
-        .padding()
+        .background(Color(.systemGroupedBackground))
         .navigationTitle(activity.displayName)
         .navigationBarTitleDisplayMode(.inline)
     }
