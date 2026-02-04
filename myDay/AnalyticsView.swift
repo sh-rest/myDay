@@ -24,27 +24,31 @@ struct AnalyticsView: View {
             Section("Activity Averages") {
                 ForEach(ActivityCategory.allCases, id: \.self) { activity in
                     if let stats = viewModel.activityStats[activity] {
-                        HStack(alignment: .center, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(activity.displayName)
-                                    .font(.headline)
+                        NavigationLink {
+                            ActivityAnalyticsView(activity: activity, viewModel: viewModel)
+                        } label: {
+                            HStack(alignment: .center, spacing: 12) {
+                                Circle()
+                                    .fill(activity.color)
+                                    .frame(width: 10, height: 10)
 
-                                HStack(spacing: 12) {
-                                    Text("This week: \(formatHours(stats.currentWeekAverageHoursPerDay)) h/day")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(activity.displayName)
+                                        .font(.headline)
 
-                                    Text("Last week: \(formatHours(stats.previousWeekAverageHoursPerDay)) h/day")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                    HStack(spacing: 12) {
+                                        Text("This week: \(formatHours(stats.currentWeekAverageHoursPerDay)) h/day")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+
+                                        Text("Last week: \(formatHours(stats.previousWeekAverageHoursPerDay)) h/day")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
                             }
-
-                            Spacer()
-
-                            changeIcon(for: stats.change)
+                            .padding(.vertical, 4)
                         }
-                        .padding(.vertical, 4)
                     }
                 }
             }
@@ -64,20 +68,6 @@ struct AnalyticsView: View {
         return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.1f", value)
     }
 
-    @ViewBuilder
-    private func changeIcon(for change: AnalyticsViewModel.WeekOverWeekChange) -> some View {
-        switch change {
-        case .increase:
-            Image(systemName: "arrow.up")
-                .foregroundStyle(.green)
-        case .decrease:
-            Image(systemName: "arrow.down")
-                .foregroundStyle(.red)
-        case .noChange:
-            Image(systemName: "arrow.right")
-                .foregroundStyle(.secondary)
-        }
-    }
 }
 
 #Preview {

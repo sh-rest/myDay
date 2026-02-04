@@ -17,6 +17,14 @@ final class AnalyticsViewModel: ObservableObject {
         let change: WeekOverWeekChange
     }
 
+    /// Per-day totals for a single activity, used for trend charts.
+    struct DailyActivityTotal: Identifiable {
+        let date: Date
+        let hours: Int
+
+        var id: Date { date }
+    }
+
     private let context: ModelContext
     private let referenceDate: Date
 
@@ -93,6 +101,25 @@ final class AnalyticsViewModel: ObservableObject {
         } catch {
             return []
         }
+    }
+
+    /// Returns daily totals (in hours) for a given activity over the supplied
+    /// date interval. The interval is interpreted in terms of logical days
+    /// [start.startOfDay, end.startOfDay].
+    func dailyTotals(for activity: ActivityCategory, in range: DateInterval) -> [DailyActivityTotal] {
+        let startDay = range.start.startOfDay
+        let endDay = range.end.startOfDay
+        let entries = fetchEntries(from: startDay, to: endDay)
+
+        var totals: [Date: Int] = [:]
+        for entry in entries where entry.category == activity {
+            let day = entry.date.startOfDay
+            totals[day, default: 0] += 1
+        }
+
+        return totals
+            .map { DailyActivityTotal(date: $0.key, hours: $0.value) }
+            .sorted { $0.date < $1.date }
     }
 
     private static func aggregateHoursByActivity(entries: [TimeEntry]) -> [ActivityCategory: Int] {
