@@ -16,3 +16,5 @@
 *.xcodeproj/*
 myDay.xcodeprof
 *.vscode
+build/
+builder.app
