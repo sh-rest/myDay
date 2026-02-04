@@ -107,8 +107,9 @@ struct TimeGridView: View {
                             // MARK: - Pinned date column (left)
                             ZStack(alignment: .topLeading) {
                                 // Full-height background for the entire pinned column area including left inset
+                                // Invisible spacer to reserve width for the pinned date column
                                 Rectangle()
-                                    .fill(.ultraThinMaterial)
+                                    .fill(.background)
                                     .frame(width: DateLabelView.columnWidth)
                                     .ignoresSafeArea(edges: .vertical)
 
@@ -166,7 +167,7 @@ struct TimeGridView: View {
         }
 .navigationTitle("myDay")
         .navigationBarTitleDisplayMode(.inline)
-        .background(Color(.systemGroupedBackground))
+        .background(.background)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(action: {
@@ -397,7 +398,7 @@ struct TimeCellView: View {
     private var size: CGFloat { GridMetrics.cellSize } // fixed square size
 
     var body: some View {
-        let isFilled = entry != nil
+//        let isFilled = entry != nil
 
         RoundedRectangle(cornerRadius: 10, style: .continuous)
             .fill(Color(.secondarySystemBackground))
