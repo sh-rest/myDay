@@ -174,7 +174,7 @@ struct TimeGridView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Legend") {
+                Button("?") {
                     withAnimation(.easeInOut) {
                         isLegendVisible.toggle()
                     }
@@ -182,7 +182,6 @@ struct TimeGridView: View {
             }
         }
         .onAppear {
-            viewModel.reloadMonth()
             hasScrolledToInitialDate = false
         }
         
