@@ -397,10 +397,10 @@ struct TimeCellView: View {
 
     private var size: CGFloat { GridMetrics.cellSize } // fixed square size
     
-    // Brighter version of the activity color for the border
+    // Darker, more vibrant version of the activity color for the border
     private var borderColor: Color {
         if let entry = entry {
-            return entry.category.color.opacity(0.3)
+            return entry.category.backgroundColor
         } else {
             return Color(.secondarySystemBackground)
         }

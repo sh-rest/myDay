@@ -67,6 +67,40 @@ public enum ActivityCategory: String, CaseIterable, Codable, Identifiable, Senda
             return Color(red: 0.55, green: 0.55, blue: 0.58)   // neutral gray
         }
     }
+    
+    public var backgroundColor: Color {
+        switch self {
+        case .sleep:
+            return Color(red: 0.10, green: 0.10, blue: 0.15)   // deeper charcoal
+
+        case .work:
+            return Color(red: 0.90, green: 0.20, blue: 0.20)   // vibrant red
+
+        case .food:
+            return Color(red: 0.95, green: 0.45, blue: 0.15)   // bold orange
+
+        case .productive:
+            return Color(red: 0.90, green: 0.75, blue: 0.20)   // vibrant gold
+
+        case .exercise:
+            return Color(red: 0.20, green: 0.80, blue: 0.45)   // vivid green
+
+        case .friends:
+            return Color(red: 0.15, green: 0.75, blue: 0.75)   // vibrant teal
+
+        case .leisure:
+            return Color(red: 0.25, green: 0.45, blue: 0.95)   // bold blue
+
+        case .family:
+            return Color(red: 0.95, green: 0.40, blue: 0.65)   // vivid rose
+
+        case .travel:
+            return Color(red: 0.55, green: 0.30, blue: 0.85)   // rich purple
+
+        case .misc:
+            return Color(red: 0.45, green: 0.45, blue: 0.50)   // darker gray
+        }
+    }
 
 }
 
