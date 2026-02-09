@@ -396,12 +396,19 @@ struct TimeCellView: View {
     let onTap: () -> Void
 
     private var size: CGFloat { GridMetrics.cellSize } // fixed square size
+    
+    // Darker, more vibrant version of the activity color for the border
+    private var borderColor: Color {
+        if let entry = entry {
+            return entry.category.backgroundColor
+        } else {
+            return Color(.secondarySystemBackground)
+        }
+    }
 
     var body: some View {
-//        let isFilled = entry != nil
-
         RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(Color(.secondarySystemBackground))
+            .fill(borderColor)
             .overlay {
                 if let entry = entry {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
