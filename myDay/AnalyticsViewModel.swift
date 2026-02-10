@@ -111,7 +111,15 @@ final class AnalyticsViewModel: ObservableObject {
         let endDay = range.end.startOfDay
         let entries = fetchEntries(from: startDay, to: endDay)
 
+        // Initialize all days in the range to 0
         var totals: [Date: Int] = [:]
+        var currentDay = startDay
+        while currentDay <= endDay {
+            totals[currentDay] = 0
+            currentDay = currentDay.addingDays(1)
+        }
+        
+        // Now populate with actual hours from entries
         for entry in entries where entry.category == activity {
             let day = entry.date.startOfDay
             totals[day, default: 0] += 1
