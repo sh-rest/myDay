@@ -1,0 +1,2 @@
+-- Make myDay a little more infra heavy.
+-- Improve the UI by making the tiles have a brighter coloured background.
