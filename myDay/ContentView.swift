@@ -400,7 +400,7 @@ struct TimeCellView: View {
     // Darker, more vibrant version of the activity color for the border
     private var borderColor: Color {
         if let entry = entry {
-            return entry.category.backgroundColor
+            return entry.category.backgroundColor.opacity(0.2)
         } else {
             return Color(.secondarySystemBackground)
         }
