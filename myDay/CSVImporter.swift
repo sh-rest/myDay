@@ -11,7 +11,48 @@ struct CSVImporter {
 
     // MARK: - Public entry point
 
-    static func importTimeEntries(from url: URL, context: ModelContext) throws -> Result {
+    /// Scans the CSV and returns the earliest and latest dates present.
+    static func availableDateRange(in url: URL) throws -> (from: Date, to: Date)? {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        let lines = raw.components(separatedBy: .newlines)
+        guard !lines.isEmpty else { return nil }
+
+        let isSheet = lines[0].lowercased().hasPrefix("date,day") ||
+                      lines[0].lowercased().hasPrefix("date, day")
+
+        let cal = Calendar.current
+        let today = Date().startOfDay
+        let currentYear = cal.component(.year, from: today)
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+
+        var dates: [Date] = []
+
+        for (idx, line) in lines.enumerated() {
+            if idx == 0 { continue }
+            let cols = line.trimmingCharacters(in: .whitespaces).components(separatedBy: ",")
+            guard !cols.isEmpty else { continue }
+
+            let date: Date?
+            if isSheet {
+                date = parseSheetDate(cols[0], currentYear: currentYear, today: today)
+            } else {
+                date = dateFormatter.date(from: cols[0].trimmingCharacters(in: .whitespaces))?.startOfDay
+            }
+            if let d = date { dates.append(d) }
+        }
+
+        guard let minDate = dates.min(), let maxDate = dates.max() else { return nil }
+        return (from: minDate, to: maxDate)
+    }
+
+    static func importTimeEntries(from url: URL, context: ModelContext,
+                                  dateRange: ClosedRange<Date>? = nil) throws -> Result {
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
 
@@ -21,15 +62,16 @@ struct CSVImporter {
 
         let header = lines[0].lowercased()
         if header.hasPrefix("date,day") || header.hasPrefix("date, day") {
-            return try importSheetFormat(lines: lines, context: context)
+            return try importSheetFormat(lines: lines, context: context, dateRange: dateRange)
         } else {
-            return try importAppFormat(lines: lines, context: context)
+            return try importAppFormat(lines: lines, context: context, dateRange: dateRange)
         }
     }
 
     // MARK: - App export format  (date,hour,activity)
 
-    private static func importAppFormat(lines: [String], context: ModelContext) throws -> Result {
+    private static func importAppFormat(lines: [String], context: ModelContext,
+                                         dateRange: ClosedRange<Date>?) throws -> Result {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
@@ -46,7 +88,10 @@ struct CSVImporter {
                   let category = ActivityCategory(rawValue: parts[2].trimmingCharacters(in: .whitespaces))
             else { skipped += 1; continue }
 
-            try upsert(date: date.startOfDay, hour: hour, category: category, context: context,
+            let day = date.startOfDay
+            if let range = dateRange, !range.contains(day) { skipped += 1; continue }
+
+            try upsert(date: day, hour: hour, category: category, context: context,
                        inserted: &inserted, updated: &updated)
         }
 
@@ -62,7 +107,8 @@ struct CSVImporter {
         5: .friends, 6: .leisure, 7: .family, 8: .misc, 9: .travel, 10: .misc
     ]
 
-    private static func importSheetFormat(lines: [String], context: ModelContext) throws -> Result {
+    private static func importSheetFormat(lines: [String], context: ModelContext,
+                                           dateRange: ClosedRange<Date>?) throws -> Result {
         let cal = Calendar.current
         let today = Date().startOfDay
         let currentYear = cal.component(.year, from: today)
@@ -79,6 +125,7 @@ struct CSVImporter {
 
             // Parse DD/MM date, infer year
             guard let date = parseSheetDate(cols[0], currentYear: currentYear, today: today) else { continue }
+            if let range = dateRange, !range.contains(date) { continue }
 
             // Columns 2–25 are hours 0–23
             for hour in 0..<24 {
