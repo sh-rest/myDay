@@ -135,6 +135,12 @@ final class AnalyticsViewModel: ObservableObject {
         }
     }
 
+    func yearlyTotals(for activity: ActivityCategory) -> [DailyActivityTotal] {
+        let end = referenceDate.startOfDay
+        let start = end.addingDays(-364)
+        return dailyTotals(for: activity, in: DateInterval(start: start, end: end))
+    }
+
     /// Returns daily totals (in hours) for a given activity over the supplied
     /// date interval. The interval is interpreted in terms of logical days
     /// [start.startOfDay, end.startOfDay].

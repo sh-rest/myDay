@@ -74,6 +74,9 @@ struct ActivityAnalyticsView: View {
                         .fill(Color(.secondarySystemBackground))
                 )
 
+                // Past-year heatmap
+                HeatmapSectionView(activity: activity, data: viewModel.yearlyTotals(for: activity))
+
                 // All-time statistics
                 let stats = viewModel.detailStats(for: activity)
                 StatsSectionView(activity: activity, stats: stats)
@@ -222,6 +225,138 @@ private struct StatCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color(.secondarySystemBackground))
         )
+    }
+}
+
+// MARK: - Heatmap
+
+private struct HeatmapSectionView: View {
+    let activity: ActivityCategory
+    let data: [AnalyticsViewModel.DailyActivityTotal]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Past Year")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+
+            HeatmapGridView(data: data, color: activity.color)
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.secondarySystemBackground))
+                )
+        }
+    }
+}
+
+private struct HeatmapGridView: View {
+    let data: [AnalyticsViewModel.DailyActivityTotal]
+    let color: Color
+
+    // Group flat day list into week columns (Mon=0 … Sun=6).
+    // Pad the first partial week with nils so Mon always sits at row 0.
+    private var weeks: [[AnalyticsViewModel.DailyActivityTotal?]] {
+        guard let first = data.first else { return [] }
+        let cal = Calendar.current
+        // weekday: 1=Sun…7=Sat → convert to 0=Mon…6=Sun
+        let rawWD = cal.component(.weekday, from: first.date)
+        let offset = (rawWD + 5) % 7   // Mon=0, Tue=1, … Sun=6
+        var padded: [AnalyticsViewModel.DailyActivityTotal?] = Array(repeating: nil, count: offset)
+        padded.append(contentsOf: data.map { Optional($0) })
+        // chunk into groups of 7
+        var result: [[AnalyticsViewModel.DailyActivityTotal?]] = []
+        var i = 0
+        while i < padded.count {
+            let end = min(i + 7, padded.count)
+            var week = Array(padded[i..<end])
+            while week.count < 7 { week.append(nil) }
+            result.append(week)
+            i += 7
+        }
+        return result
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 2) {
+                    ForEach(Array(weeks.enumerated()), id: \.offset) { idx, week in
+                        WeekColumnView(week: week, color: color,
+                                       monthLabel: monthLabel(for: idx, week: week))
+                        .id(idx)
+                    }
+                }
+            }
+            .onAppear {
+                proxy.scrollTo(weeks.count - 1, anchor: .trailing)
+            }
+        }
+    }
+
+    private func monthLabel(for idx: Int, week: [AnalyticsViewModel.DailyActivityTotal?]) -> String? {
+        guard let entry = week.compactMap({ $0 }).first else { return nil }
+        let cal = Calendar.current
+        let month = cal.component(.month, from: entry.date)
+        // Show label only on the first week of each new month
+        if idx == 0 { return monthAbbrev(month) }
+        let prevWeek = weeks[idx - 1]
+        if let prevEntry = prevWeek.compactMap({ $0 }).first {
+            let prevMonth = cal.component(.month, from: prevEntry.date)
+            if prevMonth != month { return monthAbbrev(month) }
+        }
+        return nil
+    }
+
+    private func monthAbbrev(_ month: Int) -> String {
+        let abbrevs = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+        return abbrevs[(month - 1) % 12]
+    }
+}
+
+private struct WeekColumnView: View {
+    let week: [AnalyticsViewModel.DailyActivityTotal?]
+    let color: Color
+    let monthLabel: String?
+
+    var body: some View {
+        VStack(spacing: 2) {
+            // Month label header — fixed height so all columns align
+            Text(monthLabel ?? "")
+                .font(.system(size: 8))
+                .foregroundStyle(.secondary)
+                .frame(height: 10)
+
+            ForEach(0..<7, id: \.self) { row in
+                if let entry = week[row] {
+                    HeatmapCell(hours: entry.hours, color: color)
+                } else {
+                    Color.clear.frame(width: 12, height: 12)
+                }
+            }
+        }
+    }
+}
+
+private struct HeatmapCell: View {
+    let hours: Int
+    let color: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 2, style: .continuous)
+            .fill(cellColor)
+            .frame(width: 12, height: 12)
+    }
+
+    private var cellColor: Color {
+        switch hours {
+        case 0:    return Color(.systemFill)
+        case 1...2: return color.opacity(0.3)
+        case 3...5: return color.opacity(0.55)
+        case 6...8: return color.opacity(0.8)
+        default:   return color
+        }
     }
 }
 
